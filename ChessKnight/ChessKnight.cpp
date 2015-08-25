@@ -5,6 +5,7 @@
 #include <iostream>
 #include <map>
 #include <stack>
+#include <queue>
 
 using namespace std;
 
@@ -65,42 +66,28 @@ bool IsValidMove(int sizex, int sizey, Point start, Point end)
 
 
 /// Function to determine if a sequence of moves for the knight is valid
-bool IsValidSequence(Point moves[], int numMoves, bool displayMoves, int sizex, int sizey, Point start, Point end)
+bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey, Point start, Point end)
 {
-	for (int i = 1; i < numMoves; i++)
-	{
-		// Display move as an option
-		if(displayMoves)
-			DisplayBoard(sizex, sizey, start, end, moves[i]);
+	Point current = start;
 
-		if (!IsValidMove(sizex, sizey, moves[i - 1], moves[i]))
+	while (size(moves) > 0)
+	{
+
+		if (!IsValidMove(sizex, sizey, current, moves.top()))
 		{
 			//Invalid move for the knight!
 			return false;
 		}
+
+		// Display move as an option
+		if(displayMoves)
+			DisplayBoard(sizex, sizey, start , end, moves.top());
+
+		current = moves.top();
+
+		moves.pop();
 	}
 	return true;
-}
-
-
-/// Basic unit test for testing a sequence and validation
-void TestSequence()
-{
-	Point test[5];
-	test[0] = Point{ 1,2 };
-	test[1] = Point{ 3,3 };
-	test[2] = Point{ 4,5 };
-	test[3] = Point{ 3,3 };
-	test[4] = Point{ 1,2 };
-
-	Point startPos = Point{ 1,2 };
-	Point endPos = Point{ 5,4 };
-	Point currentPos = Point{ 0,0 };
-
-	if (IsValidSequence(test, 5, true, 8, 8, startPos, endPos))
-		cout << "Valid" << endl;
-	else
-		cout << "Invalid!" << endl;
 }
 
 
@@ -142,33 +129,97 @@ vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey)
 	return localMoves;
 }
 
-bool DFS(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap)
+/// Recursive function to perform depth first search (not necessarily the shortest path)
+void DFS(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap)
 {
 	// Current node is now explored
 	explored[start.x][start.y] = true;
-
-	bool arrived = false;
 	
 	// Recursive iterations for all connected nodes
 	for (int i = 0; i < graph[start.x][start.y]->localMoves.size(); i++)
 	{
-		if (arrived)
-			break;
-
+		// Determine which local nearby node to move to next
 		int nodex = graph[start.x][start.y]->localMoves[i].x;
 		int nodey = graph[start.x][start.y]->localMoves[i].y;
 
+		// If it is not already explored, move to it
 		if (!explored[nodex][nodey])
 		{
-			DFS(graph[nodex][nodey]->localMoves[i], explored,graph,moveMap);
+			// Set the parent node of the local node so that the map stays in sync with how the knight arrived there
+			moveMap[graph[start.x][start.y]->localMoves[i]] = start;
+
+			// Recursively move from the local neighbor next as the start point
+			DFS(graph[start.x][start.y]->localMoves[i], explored, graph, moveMap);
 		}
 	}
-
-	return arrived;
 }
 
-/// Function to find a series of moves to get from the start point to the end point (Level 2)
-stack<Point> AnyPath(int sizex, int sizey, Point start, Point end)
+
+/// Use Dijkstra's shortest path algorithm to find the least number of moves necessary
+void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap, int sizex, int sizey)
+{
+	// Data structure to hold the distances needed to move to each square
+	vector<vector<int>> dist(sizex, vector<int>(sizey, 99999));
+
+	// Current node is now explored
+	explored[start.x][start.y] = true;
+	dist[start.x][start.y] = 0;
+
+	// Create a queue for the nodes to be processed
+	queue <Node*> nodes;
+
+	// Add the start node as the first item in the queue so that it starts searching from there
+	nodes.push(graph[start.x][start.y]);
+
+	// Add the rest of the nodes to the queue
+	for (int i = 0; i < sizex; i++)
+	{
+		for (int j = 0; j < sizey; j++)
+		{
+			if (start.x == i && start.y == j)
+				continue;
+			else
+				nodes.push(graph[i][j]);
+		}
+	}
+	Node* curr;
+
+	// While the queue has nodes, continue processing the number of moves necessary to reach the square
+	while(!nodes.empty())
+	{
+		curr = nodes.front();
+		nodes.pop();
+
+		// Iterate for all connected nodes to find the shortest distances in a BFS way
+		for (int k = 0; k < curr->localMoves.size(); k++)
+		{
+			// Select the neighbor
+			int nodex = curr->localMoves[k].x;
+			int nodey = curr->localMoves[k].y;
+
+			// Calculate the potential number of moves to this neighbor
+			int newDist = dist[curr->x][curr->y] + graph[nodex][nodey]->numMoves;
+
+			if (!explored[nodex][nodey] && (newDist < dist[nodex][nodey]))
+			{
+				// Set the parent node of the local node so that the map stays in sync with how the knight arrived there
+				moveMap[curr->localMoves[k]] = { curr->x , curr->y };
+
+				//Adjust the distance by adding the new number of moves to the original amount to get to that square
+				dist[nodex][nodey] = newDist;
+				explored[nodex][nodey] = true;
+			}
+		}
+	}
+}
+
+
+/// Function to find a series of moves to get from the start point to the end point
+/** Inputs: size = size of board
+*		    start = starting position
+*		    end = ending position
+*		    pathType = 1 for any path, 2 for shortest path */
+stack<Point> FindPath(int sizex, int sizey, Point start, Point end, int pathType)
 {
 	// Create map for getting the move sequence at the end (how each node got to each other node)
 	map<Point, Point> moveMap;
@@ -197,37 +248,79 @@ stack<Point> AnyPath(int sizex, int sizey, Point start, Point end)
 	// Initialize the graph to completely unexplored
 	vector<vector<bool>> explored(sizex, vector<bool>(sizey, false));
 
-	DFS(start, explored, graph, moveMap);
+	switch (pathType)
+	{
+	case 1:
+		// Compute paths from start to all possible end points with DFS
+		DFS(start, explored, graph, moveMap);
+		break;
+
+	case 2:
+		// Compute paths from start to all possible end points with dijkstra's algorithm
+		Dijkstra(start, explored, graph, moveMap, sizex, sizey);
+		break;
+	}
 
 	// Stack used for collecting the order of moves it took to get from the start to the end point
 	stack<Point> sequence;
 
 	// Work backwards from the end point along the map of moves that were made to get to it to create the sequence
 	Point curr = { end.x , end.y };
-	while ((start.x != curr.x) && (start.y != curr.y))
+	while ((start.x != curr.x) || (start.y != curr.y))
 	{
 		sequence.push(curr);
 		curr = moveMap[curr];
 	}
 
+	// Return a stack of the moves necessary to get to the end point
 	return sequence;
 }
 
 
+/// Main function used to run the Knight algorithms
 int main()
 {
 	// Initialize size of the board
 	int sizex = 8;
 	int sizey = 8;
 
-	TestSequence();
+	Point start = { 0,0 };
+	Point end = { 3,3 };
 
-	stack<Point> anyPathSequence = AnyPath(sizex, sizey, Point{ 0,0 }, Point{1,2});
-	cout << "Basic path took " << size(anyPathSequence) << " moves." << endl;
-	while(size(anyPathSequence) > 0)
+	// Perform DFS to find any path between the start point and end point
+	stack<Point> anyPathSequence = FindPath(sizex, sizey, start, end, 1);
+	
+	if (size(anyPathSequence) && IsValidSequence(anyPathSequence, false, sizex, sizey, start, end))
 	{
-		cout << "( " << anyPathSequence.top().x << " , " << anyPathSequence.top().y << " )" << endl;
-		anyPathSequence.pop();
+		cout << "Basic path took " << size(anyPathSequence) << " moves." << endl;
+		while (size(anyPathSequence) > 0)
+		{
+			cout << "( " << anyPathSequence.top().x << " , " << anyPathSequence.top().y << " )" << endl;
+			anyPathSequence.pop();
+		}
+	}
+	else
+	{
+		cout << "No valid path found." << endl;
+	}
+
+	cout << endl;
+
+	// Perform shortest path algorithm for the knight
+	stack<Point> shortestPathSequence = FindPath(sizex, sizey, start, end, 2);
+
+	if (size(shortestPathSequence) && IsValidSequence(shortestPathSequence, false, sizex, sizey, start, end))
+	{
+		cout << "Shortest path took " << size(shortestPathSequence) << " moves." << endl;
+		while (size(shortestPathSequence) > 0)
+		{
+			cout << "( " << shortestPathSequence.top().x << " , " << shortestPathSequence.top().y << " )" << endl;
+			shortestPathSequence.pop();
+		}
+	}
+	else
+	{
+		cout << "No valid path found." << endl;
 	}
 
 	getchar();
