@@ -6,6 +6,8 @@
 #include <map>
 #include <stack>
 #include <queue>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
@@ -23,26 +25,38 @@ bool operator <(Point const& p1, Point const& p2)
 	return p1.x < p2.x || (p1.x == p2.x && p1.y < p2.y);
 }
 
+/// Node structure to be used in graph data structure (array of edges)
+struct Node
+{
+	int x;
+	int y;
+	int numMoves;
+	char type;
 
-/// Function to display current state of the chess board (Level 1)
+	vector<Point> localMoves;
+};
+
+
+/// Function to display current state of the chess board
+//  Level 1
 /** Inputs: size = size of board
   *		    start = starting position
   *		    end = ending position
   *		    current = current position of the knight */
-void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current)
+void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current, vector<vector<Node *>> &graph)
 {	
 	for (int i = 0; i < sizey; i++)
 	{
 		for (int j = 0; j < sizex; j++)
 		{
 			if (current.x == j && current.y == i)
-				cout << " K";
+				cout << "K ";
 			else if (start.x == j && start.y == i)
-				cout << " S";
+				cout << "S ";
 			else if (end.x == j && end.y == i)
-				cout << " E";
+				cout << "E ";
 			else
-				cout << " .";
+				cout << graph[j][i]->type << " ";
 		}
 		// Create a new row
 		cout << endl;
@@ -52,28 +66,54 @@ void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current)
 
 
 /// Function to determine if a knight's move is valid based on the standard rules of chess
-bool IsValidMove(int sizex, int sizey, Point start, Point end)
+bool IsValidMove(int sizex, int sizey, Point start, Point end, vector<vector<Node *>> &graph, bool teleportersEnabled)
 {
+
 	// Move is outside the bounds of the board
 	if (start.x < 0 || start.x >= sizex || start.y < 0 || start.y >= sizey || end.x < 0 || end.x >= sizex || end.y < 0 || end.y >= sizey)
 		return false;
 
-	if ((abs(end.x-start.x) == 1 && abs(end.y-start.y) == 2) || (abs(end.x - start.x) == 2 && abs(end.y - start.y) == 1))
-		return true;
-	else
+
+	/*
+
+	///////////TO DO
+	graph[end.x - start.x][start.y]->type == 'B'
+	graph[end.x - start.x][start.y + 1]->type == 'B'
+
+	graph[start.x][start.y + 1]->type == 'B'
+	graph[start.x][start.y + 2]->type == 'B'
+
+
+	//Check to see if barrier is between start and end via the way you would move
+	if (graph[end.x][end.y]->type = 'B' || (graph[start.x + 1][start.y]->type == 'B' ))
 		return false;
+	*/
+
+
+	if ((abs(end.x - start.x) == 1 && abs(end.y - start.y) == 2) || (abs(end.x - start.x) == 2 && abs(end.y - start.y) == 1))
+	{
+		return true;
+	}
+	else if (teleportersEnabled)
+	{
+		cout << "Teleporting from: " << start.x << "," << start.y << " to: " << end.x << ", " << end.y;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 
 /// Function to determine if a sequence of moves for the knight is valid
-bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey, Point start, Point end)
+bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey, Point start, Point end, vector<vector<Node *>> &graph, bool teleportersEnabled)
 {
 	Point current = start;
 
 	while (size(moves) > 0)
 	{
 
-		if (!IsValidMove(sizex, sizey, current, moves.top()))
+		if (!IsValidMove(sizex, sizey, current, moves.top(), graph, teleportersEnabled))
 		{
 			//Invalid move for the knight!
 			return false;
@@ -81,7 +121,7 @@ bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey
 
 		// Display move as an option
 		if(displayMoves)
-			DisplayBoard(sizex, sizey, start , end, moves.top());
+			DisplayBoard(sizex, sizey, start , end, moves.top(), graph);
 
 		current = moves.top();
 
@@ -91,19 +131,8 @@ bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey
 }
 
 
-/// Node structure to be used in graph data structure (array of edges)
-struct Node
-{
-	int x;
-	int y;
-	int numMoves;
-
-	vector<Point> localMoves;
-};
-
-
 /// Generate the available moves for each point (don't check for on the board yet)
-vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey)
+vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey, vector<vector<Node *>> &graph)
 {
 	vector<Point> localMoves;
 
@@ -122,7 +151,7 @@ vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey)
 	// For each potential local point, verify that it is a valid move before adding it to the list of local moves
 	for (int i = 0; i < 8; i++)
 	{
-		if (IsValidMove(sizex, sizey, pt, localPoint[i]))
+		if (IsValidMove(sizex, sizey, pt, localPoint[i], graph, true))
 			localMoves.push_back(localPoint[i]);
 	}
 
@@ -130,6 +159,7 @@ vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey)
 }
 
 /// Recursive function to perform depth first search (not necessarily the shortest path)
+//  Level 2
 void DFS(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap)
 {
 	// Current node is now explored
@@ -156,6 +186,7 @@ void DFS(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &gr
 
 
 /// Use Dijkstra's shortest path algorithm to find the least number of moves necessary
+//  Level 3
 void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap, int sizex, int sizey)
 {
 	// Data structure to hold the distances needed to move to each square
@@ -219,31 +250,10 @@ void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>
 *		    start = starting position
 *		    end = ending position
 *		    pathType = 1 for any path, 2 for shortest path */
-stack<Point> FindPath(int sizex, int sizey, Point start, Point end, int pathType)
+stack<Point> FindPath(int sizex, int sizey, Point start, Point end, int pathType, vector<vector<Node *>> graph)
 {
 	// Create map for getting the move sequence at the end (how each node got to each other node)
 	map<Point, Point> moveMap;
-
-	// Create graph data structure
-	vector<vector<Node *>> graph(sizex, vector<Node *>(sizey));
-
-	// Add each square of the board to the graph
-	for (int i = 0; i < sizex; i++)
-	{
-		for (int j = 0; j < sizey; j++)
-		{
-			Node *addNode = new Node;
-			addNode->x = i;
-			addNode->y = j;
-			addNode->numMoves = 1;
-
-			// Generate the possible moves for each square (maximum of 8)
-			addNode->localMoves = GenerateLocalMoves(Point{ i,j }, sizex, sizey);
-
-			// Add the Node to the graph
-			graph[i][j] = addNode;
-		}
-	}
 
 	// Initialize the graph to completely unexplored
 	vector<vector<bool>> explored(sizex, vector<bool>(sizey, false));
@@ -277,6 +287,130 @@ stack<Point> FindPath(int sizex, int sizey, Point start, Point end, int pathType
 }
 
 
+//Function used to split a string into a vector
+vector<std::string> &split(const string &s, char delim, vector<string> &elems) {
+	stringstream ss(s);
+	string item;
+	while (getline(ss, item, delim)) {
+		elems.push_back(item);
+	}
+	return elems;
+}
+
+
+//Function used to split a string into a vector
+vector<string> split(const string &s, char delim) {
+	vector<string> elems;
+	split(s, delim, elems);
+	return elems;
+}
+
+
+vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
+{
+	if (fromFile)
+	{
+		ifstream file("C:\\Users\\sean\\Downloads\\chessboard.txt", ios::in);
+		string tmp;
+
+		// Create graph data structure
+		vector<vector<Node *>> graph(sizex, vector<Node *>(sizey));
+
+		// Index of y component
+		int y = 0;
+		bool teleportFound = false;
+		Point teleporter;
+
+		//Read file into graph structure
+		while (!file.eof())
+		{
+			getline(file, tmp);
+			vector<string> splitLine = split(tmp, ' ');
+			if (splitLine.size() == 0)
+				continue;
+
+			for (int i = 0; i < size(splitLine); i++)
+			{
+				Node *addNode = new Node;
+				addNode->x = i;
+				addNode->y = y;
+
+				addNode->type = splitLine[i][0];
+
+				switch (splitLine[i][0])
+				{
+				case '.':
+					addNode->numMoves = 1;
+					break;
+				case 'W':
+					addNode->numMoves = 2;
+					break;
+				case 'L':
+					addNode->numMoves = 5;
+					break;
+				case 'R':
+					addNode->numMoves = 999999;
+					break;
+				case 'B':
+					addNode->numMoves = 999999;
+					break;
+				case 'T':
+					addNode->numMoves = 1;
+					break;
+				}
+
+				// Generate the possible moves for each square (maximum of 8)
+				addNode->localMoves = GenerateLocalMoves(Point{ i,y }, sizex, sizey, graph);
+
+				if (addNode->type == 'T' && !teleportFound)
+				{
+					teleporter = { i, y };
+					teleportFound = true;
+				}
+				else if (addNode->type == 'T')
+				{
+					addNode->localMoves = { teleporter };
+				}
+
+				// Add the Node to the graph
+				graph[i][y] = addNode;
+			}
+
+			y++;
+		}
+		file.close();
+
+		return graph;
+	}
+	else
+	{
+		// Create graph data structure
+		vector<vector<Node *>> graph(sizex, vector<Node *>(sizey));
+
+		// Add each square of the board to the graph
+		for (int i = 0; i < sizex; i++)
+		{
+			for (int j = 0; j < sizey; j++)
+			{
+				Node *addNode = new Node;
+				addNode->x = i;
+				addNode->y = j;
+				addNode->numMoves = 1;
+
+				// Generate the possible moves for each square (maximum of 8)
+				addNode->localMoves = GenerateLocalMoves(Point{ i,j }, sizex, sizey, graph);
+
+				// Add the Node to the graph
+				graph[i][j] = addNode;
+			}
+		}
+
+		return graph;
+	}
+}
+
+
+
 /// Main function used to run the Knight algorithms
 int main()
 {
@@ -287,10 +421,12 @@ int main()
 	Point start = { 0,0 };
 	Point end = { 3,3 };
 
+	vector<vector<Node *>> graph = CreateGraph(sizex, sizey, false);
+
 	// Perform DFS to find any path between the start point and end point
-	stack<Point> anyPathSequence = FindPath(sizex, sizey, start, end, 1);
+	stack<Point> anyPathSequence = FindPath(sizex, sizey, start, end, 1, graph);
 	
-	if (size(anyPathSequence) && IsValidSequence(anyPathSequence, false, sizex, sizey, start, end))
+	if (size(anyPathSequence) && IsValidSequence(anyPathSequence, false, sizex, sizey, start, end, graph, false))
 	{
 		cout << "Basic path took " << size(anyPathSequence) << " moves." << endl;
 		while (size(anyPathSequence) > 0)
@@ -307,15 +443,40 @@ int main()
 	cout << endl;
 
 	// Perform shortest path algorithm for the knight
-	stack<Point> shortestPathSequence = FindPath(sizex, sizey, start, end, 2);
+	stack<Point> shortestPathSequence = FindPath(sizex, sizey, start, end, 2, graph);
 
-	if (size(shortestPathSequence) && IsValidSequence(shortestPathSequence, false, sizex, sizey, start, end))
+	if (size(shortestPathSequence) && IsValidSequence(shortestPathSequence, false, sizex, sizey, start, end, graph, false))
 	{
 		cout << "Shortest path took " << size(shortestPathSequence) << " moves." << endl;
 		while (size(shortestPathSequence) > 0)
 		{
 			cout << "( " << shortestPathSequence.top().x << " , " << shortestPathSequence.top().y << " )" << endl;
 			shortestPathSequence.pop();
+		}
+	}
+	else
+	{
+		cout << "No valid path found." << endl;
+	}
+
+	sizex = 32;
+	sizey = 32;
+
+	start = { 0,0 };
+	end = { 10,10 };
+
+	vector<vector<Node *>> fileGraph = CreateGraph(sizex, sizey, true);
+
+	// Perform shortest path algorithm for the knight on the complex board
+	stack<Point> complexShortestPath = FindPath(sizex, sizey, start, end, 2, fileGraph);
+
+	if (size(complexShortestPath) && IsValidSequence(complexShortestPath, true, sizex, sizey, start, end, fileGraph, true))
+	{
+		cout << "Shortest path took " << size(complexShortestPath) << " moves." << endl;
+		while (size(complexShortestPath) > 0)
+		{
+			cout << "( " << complexShortestPath.top().x << " , " << complexShortestPath.top().y << " )" << endl;
+			complexShortestPath.pop();
 		}
 	}
 	else
