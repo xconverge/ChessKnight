@@ -65,30 +65,41 @@ void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current, v
 }
 
 
+bool IsPathClear(Point start, Point end, vector<vector<Node *>> &graph)
+{
+
+	int xinc, yinc;
+	if ((end.x - start.x) > 0)
+		xinc = 1;
+	else
+		xinc = -1;
+
+	if ((end.y - start.y) > 0)
+		yinc = 1;
+	else
+		yinc = -1;
+
+	for (int x = start.x; x != end.x + xinc; x += xinc)
+	{
+		for (int y = start.y; y != end.y + yinc; y += yinc)
+		{
+			if (graph[x][y]->type == 'B')
+			{
+				return false;
+			}
+
+		}
+	}
+
+	return true;
+}
+
 /// Function to determine if a knight's move is valid based on the standard rules of chess
 bool IsValidMove(int sizex, int sizey, Point start, Point end, vector<vector<Node *>> &graph, bool teleportersEnabled)
 {
-
 	// Move is outside the bounds of the board
 	if (start.x < 0 || start.x >= sizex || start.y < 0 || start.y >= sizey || end.x < 0 || end.x >= sizex || end.y < 0 || end.y >= sizey)
 		return false;
-
-
-	/*
-
-	///////////TO DO
-	graph[end.x - start.x][start.y]->type == 'B'
-	graph[end.x - start.x][start.y + 1]->type == 'B'
-
-	graph[start.x][start.y + 1]->type == 'B'
-	graph[start.x][start.y + 2]->type == 'B'
-
-
-	//Check to see if barrier is between start and end via the way you would move
-	if (graph[end.x][end.y]->type = 'B' || (graph[start.x + 1][start.y]->type == 'B' ))
-		return false;
-	*/
-
 
 	if ((abs(end.x - start.x) == 1 && abs(end.y - start.y) == 2) || (abs(end.x - start.x) == 2 && abs(end.y - start.y) == 1))
 	{
@@ -186,7 +197,7 @@ void DFS(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &gr
 
 
 /// Use Dijkstra's shortest path algorithm to find the least number of moves necessary
-//  Level 3
+//  Level 3 and 4
 void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>> &graph, map<Point, Point> &moveMap, int sizex, int sizey)
 {
 	// Data structure to hold the distances needed to move to each square
@@ -230,6 +241,10 @@ void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>
 
 			// Calculate the potential number of moves to this neighbor
 			int newDist = dist[curr->x][curr->y] + graph[nodex][nodey]->numMoves;
+
+			// Check if there are any barriers in between the start and end point
+			if (!IsPathClear({ curr->x,curr->y }, curr->localMoves[k], graph))
+				continue;
 
 			if (!explored[nodex][nodey] && (newDist < dist[nodex][nodey]))
 			{
@@ -276,7 +291,7 @@ stack<Point> FindPath(int sizex, int sizey, Point start, Point end, int pathType
 
 	// Work backwards from the end point along the map of moves that were made to get to it to create the sequence
 	Point curr = { end.x , end.y };
-	while ((start.x != curr.x) || (start.y != curr.y))
+	while ((start.x != curr.x) || (start.y != curr.y) && (size(sequence) > 0))
 	{
 		sequence.push(curr);
 		curr = moveMap[curr];
@@ -462,8 +477,8 @@ int main()
 	sizex = 32;
 	sizey = 32;
 
-	start = { 0,0 };
-	end = { 10,10 };
+	start = { 6,0 };
+	end = { 10,0 };
 
 	vector<vector<Node *>> fileGraph = CreateGraph(sizex, sizey, true);
 
@@ -472,7 +487,7 @@ int main()
 
 	if (size(complexShortestPath) && IsValidSequence(complexShortestPath, true, sizex, sizey, start, end, fileGraph, true))
 	{
-		cout << "Shortest path took " << size(complexShortestPath) << " moves." << endl;
+		cout << "Shortest path on complex board took " << size(complexShortestPath) << " moves." << endl;
 		while (size(complexShortestPath) > 0)
 		{
 			cout << "( " << complexShortestPath.top().x << " , " << complexShortestPath.top().y << " )" << endl;
