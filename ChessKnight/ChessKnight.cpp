@@ -45,6 +45,7 @@ struct Node
   *		    current = current position of the knight */
 void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current, vector<vector<Node *>> &graph)
 {	
+	// Loop to display all elements of the board from the graph
 	for (int i = 0; i < sizey; i++)
 	{
 		for (int j = 0; j < sizex; j++)
@@ -65,10 +66,12 @@ void DisplayBoard(int sizex, int sizey, Point start, Point end, Point current, v
 }
 
 
+/// Verify that the path between the start point and the end point is not obstructed by barriers
 bool IsPathClear(Point start, Point end, vector<vector<Node *>> &graph)
 {
-
+	//Find the orientation of the start vs end to create iterators
 	int xinc, yinc;
+
 	if ((end.x - start.x) > 0)
 		xinc = 1;
 	else
@@ -79,20 +82,19 @@ bool IsPathClear(Point start, Point end, vector<vector<Node *>> &graph)
 	else
 		yinc = -1;
 
+	// Iterate and look for clear path between the start and end point
 	for (int x = start.x; x != end.x + xinc; x += xinc)
 	{
 		for (int y = start.y; y != end.y + yinc; y += yinc)
 		{
 			if (graph[x][y]->type == 'B')
-			{
 				return false;
-			}
-
 		}
 	}
 
 	return true;
 }
+
 
 /// Function to determine if a knight's move is valid based on the standard rules of chess
 bool IsValidMove(int sizex, int sizey, Point start, Point end, vector<vector<Node *>> &graph, bool teleportersEnabled)
@@ -101,13 +103,31 @@ bool IsValidMove(int sizex, int sizey, Point start, Point end, vector<vector<Nod
 	if (start.x < 0 || start.x >= sizex || start.y < 0 || start.y >= sizey || end.x < 0 || end.x >= sizex || end.y < 0 || end.y >= sizey)
 		return false;
 
+	if (teleportersEnabled)
+	{
+		// Make sure path between is not blocked by barriers
+		if (!IsPathClear(start, end, graph))
+			return false;
+		// Make sure it is not moving to a rock
+		if (graph[end.x][end.y]->type == 'R')
+			return false;
+		// Make sure it is not moving to a barrier
+		if (graph[end.x][end.y]->type == 'B')
+			return false;
+	}
+
+	// Make sure the move configuration was correct
 	if ((abs(end.x - start.x) == 1 && abs(end.y - start.y) == 2) || (abs(end.x - start.x) == 2 && abs(end.y - start.y) == 1))
 	{
 		return true;
 	}
 	else if (teleportersEnabled)
 	{
-		cout << "Teleporting from: " << start.x << "," << start.y << " to: " << end.x << ", " << end.y;
+		//Make sure the start and end are teleporters
+		if ((graph[start.x][start.y]->type == 'T') && (graph[end.x][end.y]->type == 'T'))
+			cout << "Teleporting from: " << start.x << "," << start.y << " to: " << end.x << ", " << end.y;
+		else
+			return false;
 	}
 	else
 	{
@@ -143,7 +163,7 @@ bool IsValidSequence(stack<Point> moves, bool displayMoves, int sizex, int sizey
 
 
 /// Generate the available moves for each point (don't check for on the board yet)
-vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey, vector<vector<Node *>> &graph)
+vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey, vector<vector<Node *>> &graph, bool complexBoard)
 {
 	vector<Point> localMoves;
 
@@ -162,7 +182,7 @@ vector<Point> GenerateLocalMoves(Point pt, int sizex, int sizey, vector<vector<N
 	// For each potential local point, verify that it is a valid move before adding it to the list of local moves
 	for (int i = 0; i < 8; i++)
 	{
-		if (IsValidMove(sizex, sizey, pt, localPoint[i], graph, true))
+		if (IsValidMove(sizex, sizey, pt, localPoint[i], graph, complexBoard))
 			localMoves.push_back(localPoint[i]);
 	}
 
@@ -213,17 +233,6 @@ void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>
 	// Add the start node as the first item in the queue so that it starts searching from there
 	nodes.push(graph[start.x][start.y]);
 
-	// Add the rest of the nodes to the queue
-	for (int i = 0; i < sizex; i++)
-	{
-		for (int j = 0; j < sizey; j++)
-		{
-			if (start.x == i && start.y == j)
-				continue;
-			else
-				nodes.push(graph[i][j]);
-		}
-	}
 	Node* curr;
 
 	// While the queue has nodes, continue processing the number of moves necessary to reach the square
@@ -254,6 +263,9 @@ void Dijkstra(Point start, vector<vector<bool>> &explored, vector<vector<Node *>
 				//Adjust the distance by adding the new number of moves to the original amount to get to that square
 				dist[nodex][nodey] = newDist;
 				explored[nodex][nodey] = true;
+
+				//Add node to stack to explore its neightbors
+				nodes.push(graph[nodex][nodey]);
 			}
 		}
 	}
@@ -352,6 +364,7 @@ vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
 
 				addNode->type = splitLine[i][0];
 
+				// Set the type of chess square based on the character read
 				switch (splitLine[i][0])
 				{
 				case '.':
@@ -374,9 +387,6 @@ vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
 					break;
 				}
 
-				// Generate the possible moves for each square (maximum of 8)
-				addNode->localMoves = GenerateLocalMoves(Point{ i,y }, sizex, sizey, graph);
-
 				if (addNode->type == 'T' && !teleportFound)
 				{
 					teleporter = { i, y };
@@ -384,7 +394,9 @@ vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
 				}
 				else if (addNode->type == 'T')
 				{
+					// Add the teleporting moves
 					addNode->localMoves = { teleporter };
+					graph[teleporter.x][teleporter.y]->localMoves.push_back({ i,y });
 				}
 
 				// Add the Node to the graph
@@ -394,6 +406,18 @@ vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
 			y++;
 		}
 		file.close();
+
+		for (int x = 0; x < sizex; x++)
+		{
+			for (int y = 0; y < sizey; y++)
+			{
+				if (graph[x][y]->type != 'T')
+				{
+					// Generate the possible moves for each square (maximum of 8)
+					graph[x][y]->localMoves = GenerateLocalMoves(Point{ x,y }, sizex, sizey, graph, true);
+				}
+			}
+		}
 
 		return graph;
 	}
@@ -413,7 +437,7 @@ vector<vector<Node *>> CreateGraph(int sizex, int sizey, bool fromFile)
 				addNode->numMoves = 1;
 
 				// Generate the possible moves for each square (maximum of 8)
-				addNode->localMoves = GenerateLocalMoves(Point{ i,j }, sizex, sizey, graph);
+				addNode->localMoves = GenerateLocalMoves(Point{ i,j }, sizex, sizey, graph, false);
 
 				// Add the Node to the graph
 				graph[i][j] = addNode;
@@ -477,17 +501,17 @@ int main()
 	sizex = 32;
 	sizey = 32;
 
-	start = { 6,0 };
-	end = { 10,0 };
+	start = { 7,0 };
+	end = { 11,1 };
 
 	vector<vector<Node *>> fileGraph = CreateGraph(sizex, sizey, true);
 
 	// Perform shortest path algorithm for the knight on the complex board
 	stack<Point> complexShortestPath = FindPath(sizex, sizey, start, end, 2, fileGraph);
 
-	if (size(complexShortestPath) && IsValidSequence(complexShortestPath, true, sizex, sizey, start, end, fileGraph, true))
+	if (size(complexShortestPath) && IsValidSequence(complexShortestPath, false, sizex, sizey, start, end, fileGraph, true))
 	{
-		cout << "Shortest path on complex board took " << size(complexShortestPath) << " moves." << endl;
+		cout << "Shortest path on complex board took " << size(complexShortestPath) << " moves of the knight." << endl;
 		while (size(complexShortestPath) > 0)
 		{
 			cout << "( " << complexShortestPath.top().x << " , " << complexShortestPath.top().y << " )" << endl;
